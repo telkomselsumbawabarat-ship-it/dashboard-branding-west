@@ -18,13 +18,18 @@ Buka https://script.google.com/home/usersettings dengan akun Google yang akan me
 
 ## 3. Buat kunci akses Google untuk GitHub (5 menit, lewat browser)
 1. Di halaman repo GitHub: **Code › Codespaces › Create codespace on main**. Tunggu sampai terminal muncul di bawah.
-2. Ketik di terminal lalu Enter:
+2. Ketik di terminal lalu Enter (**tanpa** `--no-localhost`; opsi itu sudah diblokir Google dan memunculkan *"Access blocked: … request is invalid"*):
    ```
-   npx -y @google/clasp@2.4.2 login --no-localhost
+   npx -y @google/clasp@2.4.2 login
    ```
-3. Buka link yang muncul, pilih akun Google yang sama dengan langkah 2, klik **Allow**.
-4. Browser berakhir di halaman error *"localhost refused to connect"*. Itu normal. **Salin seluruh alamat di address bar** (diawali `http://localhost`), tempel ke terminal, Enter.
-   Bila yang diminta berupa *code*, tempel kode yang tampil di halaman.
+   Terminal menampilkan link dan **menunggu**. Biarkan terminal ini tetap berjalan.
+3. Buka link itu, pilih akun Google yang sama dengan langkah 2, lalu klik **Allow**.
+4. Browser berakhir di halaman error *"localhost refused to connect"*. Itu normal. **Salin seluruh alamat di address bar** (diawali `http://localhost:` dan berisi `code=`).
+   Buka **terminal kedua** (ikon **+** di panel terminal), ketik `curl "` lalu tempel alamat tadi, tutup dengan `"`, Enter. Contoh:
+   ```
+   curl "http://localhost:37XXX/?code=4/0Ab...&scope=..."
+   ```
+   Terminal pertama akan menulis **Authorization successful**.
 5. Ketik `cat ~/.clasprc.json`, lalu **salin seluruh teks** yang muncul (diawali `{` dan diakhiri `}`).
 6. Hapus codespace: **Code › Codespaces › … › Delete**.
 
