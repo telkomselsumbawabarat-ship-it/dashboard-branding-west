@@ -16,7 +16,7 @@
 // Bila mengisi manual, ganti '__KODE_AKSES__' dengan kode Anda (mis. 'ksb2026').
 var KODE_AKSES = '__KODE_AKSES__';
 var NAMA_FOLDER_FOTO = 'Dokumentasi Branding KSB';
-var VERSI_KODE = '2026-11-09b';             // jangan diubah kecuali dashboard juga diperbarui
+var VERSI_KODE = '2026-11-09c';             // jangan diubah kecuali dashboard juga diperbarui
 // ==========================
 
 var MAT = [
@@ -383,7 +383,8 @@ function simpanLaporan_(L) {
   var id = String(L.outletId || '');
   if (!id) throw new Error('ID outlet kosong.');
   var items = (L.items || []).filter(function (k) { return MAT.some(function (m) { return m[0] === k; }); });
-  if (items.length && !/^\d{4}-\d{2}-\d{2}$/.test(L.tglPasang || '')) throw new Error('Tanggal pemasangan tidak valid.');
+  if (items.length && !/^\d{4}-\d{2}-\d{2}$/.test(L.tglPasang || '')) throw new Error('Tanggal pemasangan wajib diisi.');
+  if (!String(L.pelapor || '').trim()) throw new Error('Nama pelapor wajib diisi.');
   var fotoMat = {};
   items.forEach(function (k) { fotoMat[k] = ((L.fotoMat || {})[k] || []).filter(String); });
   var kurang = items.filter(function (k) { return !fotoMat[k].length; });

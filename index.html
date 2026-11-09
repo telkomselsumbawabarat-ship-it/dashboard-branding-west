@@ -164,6 +164,11 @@ td .sub{font-size:12px;color:var(--muted)}
 .mp .thumbs:empty{display:none}
 .mp.need{border-color:var(--warn);background:var(--warn-soft)}
 .gal-h{font-size:13px;font-weight:700;margin:2px 0 6px}
+.req{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--red);background:var(--red-soft);padding:1px 7px;border-radius:99px;vertical-align:2px}
+.field.miss{border-color:var(--red)}
+#saveHint{margin:-4px 0 0;font-size:13px;color:var(--muted);text-align:center}
+#saveHint b{color:var(--red)}
+select.field{appearance:auto}
 .summary{border-radius:var(--r);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);background:var(--surface)}
 .summary .big{font-size:18px;font-weight:800}
 .notice{padding:12px 14px;border-radius:10px;background:var(--warn-soft);color:var(--fg);font-size:14px}
@@ -363,22 +368,23 @@ img{max-width:100%}
       </div>
 
       <div class="step">
-        <h3><span class="n">4</span>Tanggal pemasangan</h3>
-        <input class="field" id="tgl" type="date">
+        <h3><span class="n">4</span>Tanggal pemasangan<span class="req" id="tglReq">wajib</span></h3>
+        <input class="field" id="tgl" type="date" aria-required="true">
         <p class="hint" id="tglHint" style="margin:8px 0 0"></p>
       </div>
 
       <div class="step">
         <h3><span class="n">5</span>Pelapor &amp; catatan</h3>
-        <label class="hint" for="pel" style="display:block">Nama pelapor</label>
-        <input class="field" id="pel" list="sfList" autocomplete="name" placeholder="Nama Anda">
-        <datalist id="sfList"></datalist>
+        <label class="hint" for="pel" style="display:block">Nama pelapor <span class="req">wajib</span></label>
+        <select class="field" id="pel" aria-required="true"><option value="">— Pilih nama pelapor —</option></select>
+        <input class="field" id="pelLain" placeholder="Ketik nama pelapor" autocomplete="name" hidden style="margin-top:8px">
         <label class="hint" for="cat" style="display:block;margin-top:12px">Catatan (opsional)</label>
         <textarea class="field" id="cat" rows="2" placeholder="contoh: poster dipasang di kaca depan"></textarea>
       </div>
 
       <div class="summary" id="sum"></div>
-      <button class="btn pri big" id="btnSave" type="submit">Simpan laporan</button>
+      <button class="btn pri big" id="btnSave" type="submit" disabled>Simpan laporan</button>
+      <p id="saveHint" aria-live="polite"></p>
       <input id="file" type="file" accept="image/*" multiple hidden>
     </form>
   </div>
@@ -394,7 +400,7 @@ img{max-width:100%}
 <script src="config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const VERSI_HARAP='2026-11-09b';
+const VERSI_HARAP='2026-11-09c';
 const API=((window.APP_CONFIG||{}).API_URL||'').trim();
 const MAT = [
   {k:'poster',n:'Poster',i:'<rect x="7" y="4" width="18" height="24" rx="1.5"/><path d="M11 10h10M11 14h10M11 18h6"/>'},
@@ -468,7 +474,8 @@ async function load(silent){
   finally{loading=false}
 }
 $('#btnRefresh').onclick=()=>load();
-setInterval(()=>{if(document.visibilityState==='visible'&&!$('#btnSave').disabled)load(true)},120000);
+let saving=false;
+setInterval(()=>{if(document.visibilityState==='visible'&&!saving)load(true)},120000);
 
 /* ---------- status ---------- */
 function info(o){
@@ -509,7 +516,7 @@ function fillFilters(){
   set($('#fTap'),[...new Set(O.map(o=>o.tap))].sort(),'Semua TAP');
   set($('#fSf'),[...new Set(O.map(o=>o.sf))].sort(),'Semua SF');
   $('#fMat').innerHTML='<option value="">Semua matpro</option>'+MAT.map(m=>'<option value="'+m.k+'">'+m.n+'</option>').join('');
-  $('#sfList').innerHTML=[...new Set(O.map(o=>title(o.sf)))].sort().map(v=>'<option value="'+esc(v)+'">').join('');
+  fillPelapor();
   $('#nOutlet').textContent=O.length.toLocaleString('id-ID');
 }
 function renderDash(){
@@ -623,8 +630,26 @@ async function saveCek(id){
 let sel=null,P={};const MAXF=3;
 MAT.forEach(m=>P[m.k]=[]);
 $('#tiles').innerHTML=MAT.map(m=>'<div class="tile"><input type="checkbox" id="m_'+m.k+'" value="'+m.k+'"><label for="m_'+m.k+'"><svg viewBox="0 0 32 32" aria-hidden="true">'+m.i+'</svg>'+m.n+'</label><span class="tick">✓</span></div>').join('');
-$('#tgl').value=TODAY;$('#tgl').max=TODAY;
-$('#pel').value=ls.get('bksb_pelapor');
+$('#tgl').value='';$('#tgl').max=TODAY;
+/* ---------- pelapor (dropdown) ---------- */
+const PELAPOR_TETAP=['Arya Akbar','Buyung'];
+function fillPelapor(){
+  const pel=$('#pel'),cur=pelVal()||ls.get('bksb_pelapor');
+  const sfs=[...new Set(O.map(o=>title(o.sf)))].filter(n=>n&&!PELAPOR_TETAP.includes(n)).sort();
+  const opt=v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>';
+  pel.innerHTML='<option value="">— Pilih nama pelapor —</option><optgroup label="Tim cluster">'+PELAPOR_TETAP.map(opt).join('')+'</optgroup>'+(sfs.length?'<optgroup label="Sales Force">'+sfs.map(opt).join('')+'</optgroup>':'')+'<option value="__lain">Lainnya (ketik nama)</option>';
+  setPelapor(cur);
+}
+function setPelapor(v){
+  const pel=$('#pel');v=v||'';
+  if(!v){pel.value='';$('#pelLain').hidden=true;$('#pelLain').value=''}
+  else if([...pel.options].some(o=>o.value===v)){pel.value=v;$('#pelLain').hidden=true;$('#pelLain').value=''}
+  else{pel.value='__lain';$('#pelLain').hidden=false;$('#pelLain').value=v}
+}
+function pelVal(){const v=$('#pel').value;return v==='__lain'?$('#pelLain').value.trim():v}
+$('#pel').addEventListener('change',()=>{const lain=$('#pel').value==='__lain';$('#pelLain').hidden=!lain;if(lain)$('#pelLain').focus();renderSum()});
+$('#pelLain').addEventListener('input',renderSum);
+fillPelapor();
 const oq=$('#oq');
 oq.addEventListener('input',()=>{
   const q=oq.value.trim().toLowerCase(),box=$('#oRes');
@@ -641,7 +666,7 @@ function pickOutlet(id){
   const i=info(o),r=i.r;
   $('#oCard').innerHTML='<dl class="ocard"><div class="full"><b>'+esc(o.nama)+'</b>'+pill(i)+'</div><div><dt>ID Digipos</dt><dd class="mono">'+esc(o.id)+'</dd></div><div><dt>Kecamatan</dt><dd>'+esc(title(o.kec))+'</dd></div><div><dt>TAP</dt><dd>'+esc(o.tap)+'</dd></div><div><dt>Sales force</dt><dd>'+esc(title(o.sf))+'</dd></div><div><dt>Hari PJP</dt><dd>'+esc(o.hari)+'</dd></div><div><dt>Klasifikasi</dt><dd>'+esc(o.klas)+'</dd></div>'+(r?'<div class="full" style="font-size:12.5px;color:var(--muted)">Outlet ini sudah punya laporan. Isian di bawah memuat data terakhir; simpan untuk memperbarui.</div>':'')+'</dl>';
   MAT.forEach(m=>$('#m_'+m.k).checked=!!(r&&r.items&&r.items.includes(m.k)));
-  $('#tgl').value=r&&r.tglPasang||TODAY;$('#cat').value=r&&r.catatan||'';
+  $('#tgl').value=r&&r.tglPasang||'';$('#cat').value=r&&r.catatan||'';
   clearPhotos();
   const fm=(r&&r.fotoMat)||{};
   MAT.forEach(m=>P[m.k]=(fm[m.k]||[]).map(id=>({id,url:thumb(id,400)})));
@@ -670,6 +695,21 @@ function renderSum(){
   else if(!it.length)h='<span class="pill p-bad">Belum branding</span><div class="muted">Belum ada matpro dicentang. Centang minimal 1 item agar outlet berstatus Sudah Branding.</div>';
   else h='<span class="pill p-ok">Sudah branding</span><div><b>'+esc(sel.nama)+'</b> · '+it.length+' matpro ('+it.map(k=>MATN[k]).join(', ')+')<br><span class="muted">Cek matpro: '+(t?fmt(addMonths(t,3)):'–')+' · '+nf+' foto</span>'+(ms.length?'<br><span style="color:var(--warn);font-weight:600">Foto belum ada: '+ms.map(k=>MATN[k]).join(', ')+'</span>':'')+'</div>';
   $('#sum').innerHTML=h;
+  // syarat sebelum tombol Simpan aktif
+  const need=[];
+  if(!sel)need.push('pilih outlet');
+  if(ms.length)need.push('foto '+ms.map(k=>MATN[k]).join(', '));
+  const perluTgl=it.length>0;
+  if(perluTgl&&!t)need.push('tanggal pemasangan');
+  if(t&&t>TODAY)need.push('tanggal pemasangan tidak boleh melewati hari ini');
+  if(!pelVal())need.push('nama pelapor');
+  $('#tglReq').textContent=perluTgl?'wajib':'tidak perlu';
+  $('#tgl').disabled=!perluTgl&&!!sel;
+  $('#tgl').classList.toggle('miss',!!sel&&perluTgl&&!t);
+  $('#pel').classList.toggle('miss',!!sel&&!pelVal()&&$('#pel').value!=='__lain');
+  $('#pelLain').classList.toggle('miss',$('#pel').value==='__lain'&&!pelVal());
+  if(sel&&!perluTgl)$('#tglHint').textContent='Tidak ada matpro dicentang, jadi tanggal pemasangan tidak diperlukan.';
+  if(!saving){$('#btnSave').disabled=need.length>0;$('#saveHint').innerHTML=need.length?'Lengkapi dulu: <b>'+esc(need.join(' · '))+'</b>':'Semua isian lengkap. Siap disimpan.'}
 }
 async function shrink(file){
   const img=await new Promise((res,rej)=>{const u=URL.createObjectURL(file);const im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=rej;im.src=u});
@@ -695,14 +735,14 @@ $('#frm').addEventListener('submit',async e=>{
   e.preventDefault();
   if(!API){toast('Dashboard belum tersambung ke Google Sheet.');return}
   if(!sel){toast('Pilih outlet terlebih dahulu.');oq.focus();return}
-  const it=chosen(),t=$('#tgl').value,pel=$('#pel').value.trim();
+  const it=chosen(),t=$('#tgl').value,pel=pelVal();
   const ms=missing();if(ms.length){toast('Tambahkan foto untuk: '+ms.map(k=>MATN[k]).join(', ')+'.');$('#mphoto').scrollIntoView({behavior:'smooth',block:'center'});return}
   if(it.length&&!t){toast('Isi tanggal pemasangan.');$('#tgl').focus();return}
   if(t>TODAY){toast('Tanggal pemasangan tidak boleh di masa depan.');return}
   if(!pel){toast('Isi nama pelapor.');$('#pel').focus();return}
   ls.set('bksb_pelapor',pel);
   const all=it.flatMap(k=>P[k].map(p=>[k,p]));const nNew=all.filter(x=>x[1].blob).length;
-  const btn=$('#btnSave');btn.disabled=true;
+  const btn=$('#btnSave');saving=true;btn.disabled=true;$('#saveHint').textContent='Jangan tutup halaman sampai selesai.';
   try{
     let c=0;
     for(const [k,p] of all){if(!p.blob)continue;c++;btn.textContent='Mengunggah foto '+c+'/'+nNew+'…';
@@ -717,9 +757,9 @@ $('#frm').addEventListener('submit',async e=>{
     toast(it.length?'Tersimpan: '+sel.nama+' Sudah Branding.':'Tersimpan: '+sel.nama+' Belum Branding.');
     renderDash();resetForm();
   }catch(err){toast('Gagal menyimpan: '+(err.message||'coba lagi')+'. Foto yang sudah terunggah tidak perlu diulang.')}
-  finally{btn.disabled=false;btn.textContent='Simpan laporan'}
+  finally{saving=false;btn.textContent='Simpan laporan';renderSum()}
 });
-function resetForm(){sel=null;oq.value='';$('#oCard').innerHTML='';MAT.forEach(m=>$('#m_'+m.k).checked=false);$('#tgl').value=TODAY;$('#cat').value='';clearPhotos();renderPhotos()}
+function resetForm(){sel=null;oq.value='';$('#oCard').innerHTML='';MAT.forEach(m=>$('#m_'+m.k).checked=false);$('#tgl').value='';$('#cat').value='';clearPhotos();renderPhotos()}
 
 /* ---------- export ---------- */
 $('#btnExport').onclick=()=>{
