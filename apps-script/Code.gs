@@ -16,7 +16,7 @@
 // Bila mengisi manual, ganti '__KODE_AKSES__' dengan kode Anda (mis. 'ksb2026').
 var KODE_AKSES = '__KODE_AKSES__';
 var NAMA_FOLDER_FOTO = 'Dokumentasi Branding KSB';
-var VERSI_KODE = '2026-11-09a';             // jangan diubah kecuali dashboard juga diperbarui
+var VERSI_KODE = '2026-11-09b';             // jangan diubah kecuali dashboard juga diperbarui
 // ==========================
 
 var MAT = [
@@ -73,22 +73,201 @@ function cekKode_(k) {
   if (kode && String(k || '') !== kode) throw new Error('KODE_SALAH');
 }
 
-/* ---------------- setup (jalankan sekali dari editor) ---------------- */
+/* ---------------- setup ---------------- */
+/**
+ * Menu di Google Sheet + inisialisasi otomatis saat file dibuka.
+ * onOpen (simple trigger) boleh mengubah Sheet ini tanpa izin tambahan,
+ * jadi tab Outlet/Laporan/Riwayat/Ringkasan langsung terbentuk walau
+ * fungsi setup belum pernah dijalankan.
+ */
+function onOpen() {
+  var ss = SpreadsheetApp.getActive();
+  try {
+    SpreadsheetApp.getUi().createMenu('Branding KSB')
+      .addItem('Setup & rapikan tampilan', 'setup')
+      .addItem('Perbarui Ringkasan', 'perbaruiRingkasan')
+      .addToUi();
+  } catch (e) { /* tanpa UI (mis. dipanggil dari script) */ }
+  try {
+    if (!ss.getSheetByName('Outlet') || !ss.getSheetByName('Laporan') || !ss.getSheetByName('Ringkasan')) siapkanSemua_(ss);
+  } catch (e) { console.warn('onOpen: ' + e); }
+}
+
+/** Jalankan sekali dari editor (atau menu Branding KSB). Aman diulang: data tidak pernah dihapus. */
 function setup() {
   var ss = SpreadsheetApp.getActive();
+  siapkanSemua_(ss);
+  folderInduk_();
+  return 'Setup selesai.';
+}
+
+function perbaruiRingkasan() { buatRingkasan_(SpreadsheetApp.getActive()); }
+
+function siapkanSemua_(ss) {
   siapkanSheet_(ss, 'Outlet', HEAD_OUTLET);
   var lap = siapkanSheet_(ss, 'Laporan', HEAD_LAPORAN);
   siapkanSheet_(ss, 'Riwayat', HEAD_RIWAYAT);
-  // kolom tanggal disimpan sebagai teks yyyy-mm-dd supaya tidak bergeser zona waktu
+  // kolom tanggal & ID disimpan sebagai teks supaya tidak bergeser zona waktu / jadi angka ilmiah
+  var li = indeksKolom_(lap.getRange(1, 1, 1, lap.getLastColumn()).getDisplayValues()[0]);
   ['Tanggal Pemasangan', 'Jadwal Cek Matpro', 'Tanggal Cek Terakhir', 'ID Digipos'].forEach(function (h) {
-    var c = HEAD_LAPORAN.indexOf(h) + 1;
-    lap.getRange(2, c, lap.getMaxRows() - 1, 1).setNumberFormat('@');
+    if (li[h] != null) lap.getRange(2, li[h] + 1, lap.getMaxRows() - 1, 1).setNumberFormat('@');
   });
   isiOutletAwal_(ss);
+  rapikanTampilan_(ss);
+  buatRingkasan_(ss);
   var def = ss.getSheetByName('Sheet1');
   if (def && ss.getSheets().length > 1 && def.getLastRow() === 0) ss.deleteSheet(def);
-  folderInduk_();
-  return 'Setup selesai.';
+}
+
+/* ---------------- tampilan ---------------- */
+var WARNA = { navy: '#0f1d3a', navyMuda: '#e6ecf7', merah: '#d5121c', hijau: '#e3f4e8', hijauTeks: '#17803d', oranye: '#fdf0dc', oranyeTeks: '#b45309', abu: '#eceff4', abuTeks: '#5d6879' };
+
+function gayaHeader_(sh, nKolom) {
+  var h = sh.getRange(1, 1, 1, nKolom);
+  h.setBackground(WARNA.navy).setFontColor('#ffffff').setFontWeight('bold')
+    .setVerticalAlignment('middle').setWrap(true);
+  sh.setRowHeight(1, 36);
+  sh.setFrozenRows(1);
+}
+
+function lebarKolom_(sh, idx, peta) {
+  Object.keys(peta).forEach(function (h) { if (idx[h] != null) sh.setColumnWidth(idx[h] + 1, peta[h]); });
+}
+
+function pastikanFilter_(sh, nKolom) {
+  if (sh.getFilter()) return;
+  sh.getRange(1, 1, Math.max(sh.getLastRow(), 2), nKolom).createFilter();
+}
+
+function rapikanTampilan_(ss) {
+  // Outlet
+  var o = ss.getSheetByName('Outlet');
+  var oi = indeksKolom_(o.getRange(1, 1, 1, o.getLastColumn()).getDisplayValues()[0]);
+  gayaHeader_(o, o.getLastColumn());
+  o.setFrozenColumns(3);
+  lebarKolom_(o, oi, { 'ID Digipos': 110, 'NO RS': 115, 'Nama Outlet': 210, 'Kabupaten': 125, 'Kecamatan': 130, 'TAP': 120, 'Nama SF': 170, 'Hari PJP': 80, 'Klasifikasi': 115 });
+  pastikanFilter_(o, o.getLastColumn());
+  o.setTabColor(WARNA.abuTeks);
+
+  // Laporan
+  var l = ss.getSheetByName('Laporan');
+  var nL = l.getLastColumn();
+  var li = indeksKolom_(l.getRange(1, 1, 1, nL).getDisplayValues()[0]);
+  gayaHeader_(l, nL);
+  l.setFrozenColumns(2);
+  var lebar = { 'ID Digipos': 110, 'Nama Outlet': 190, 'TAP': 115, 'Nama SF': 160, 'Jumlah Matpro': 80, 'Status': 125,
+    'Tanggal Pemasangan': 105, 'Jadwal Cek Matpro': 105, 'Tanggal Cek Terakhir': 105, 'Kondisi Cek': 150, 'Keterangan': 120,
+    'Pelapor': 140, 'Catatan': 220, 'Diperbarui': 125, 'Folder Foto': 120 };
+  MAT.forEach(function (m) { lebar[m[1]] = 82; });
+  lebarKolom_(l, li, lebar);
+  // matpro: rata tengah; kolom JSON foto disembunyikan (dibaca dashboard, tidak untuk manusia)
+  MAT.forEach(function (m) { if (li[m[1]] != null) l.getRange(1, li[m[1]] + 1, l.getMaxRows(), 1).setHorizontalAlignment('center'); });
+  if (li['Foto (JSON)'] != null) l.hideColumns(li['Foto (JSON)'] + 1);
+  pastikanFilter_(l, nL);
+  l.setTabColor(WARNA.merah);
+  // warna status
+  var rules = [];
+  var kol = function (h) { return li[h] == null ? null : l.getRange(2, li[h] + 1, l.getMaxRows() - 1, 1); };
+  var pasang = function (rg, teks, bg, fg) {
+    if (!rg) return;
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(teks).setBackground(bg).setFontColor(fg).setBold(true).setRanges([rg]).build());
+  };
+  pasang(kol('Status'), 'Sudah Branding', WARNA.hijau, WARNA.hijauTeks);
+  pasang(kol('Status'), 'Belum Branding', WARNA.abu, WARNA.abuTeks);
+  pasang(kol('Keterangan'), 'Branding', WARNA.hijau, WARNA.hijauTeks);
+  pasang(kol('Keterangan'), 'Cek Matpro', WARNA.oranye, WARNA.oranyeTeks);
+  pasang(kol('Keterangan'), 'Belum branding', WARNA.abu, WARNA.abuTeks);
+  MAT.forEach(function (m) { pasang(kol(m[1]), 'Ya', WARNA.navyMuda, WARNA.navy); });
+  l.setConditionalFormatRules(rules);
+
+  // Riwayat
+  var r = ss.getSheetByName('Riwayat');
+  gayaHeader_(r, HEAD_RIWAYAT.length);
+  var ri = indeksKolom_(HEAD_RIWAYAT);
+  lebarKolom_(r, ri, { 'Waktu': 150, 'Versi Kode': 95, 'Aksi': 70, 'ID Digipos': 110, 'Nama Outlet': 190, 'Oleh': 140, 'Detail': 320 });
+  r.setTabColor(WARNA.abuTeks);
+}
+
+/** Tab Ringkasan berisi rumus saja (dibangun ulang aman; tidak menyimpan data). */
+function buatRingkasan_(ss) {
+  var sh = ss.getSheetByName('Ringkasan') || ss.insertSheet('Ringkasan', 0);
+  ss.setActiveSheet(sh); ss.moveActiveSheet(1);
+  var l = ss.getSheetByName('Laporan'), o = ss.getSheetByName('Outlet');
+  var li = indeksKolom_(l.getRange(1, 1, 1, l.getLastColumn()).getDisplayValues()[0]);
+  var oi = indeksKolom_(o.getRange(1, 1, 1, o.getLastColumn()).getDisplayValues()[0]);
+  var L = function (h) { var c = colLetter_(li[h] + 1); return 'Laporan!$' + c + '$2:$' + c; };
+  var Oc = function (h) { var c = colLetter_(oi[h] + 1); return 'Outlet!$' + c + '$2:$' + c; };
+  sh.clear(); sh.clearConditionalFormatRules && sh.clearConditionalFormatRules();
+  if (sh.getMaxColumns() < 6) sh.insertColumnsAfter(sh.getMaxColumns(), 6 - sh.getMaxColumns());
+
+  var baris = [];
+  baris.push(['Rekap Branding Cluster Sumbawa Barat', '', '', '', '', '']);
+  baris.push(['Terhitung otomatis dari tab Laporan & Outlet. Status cek matpro mengikuti tanggal hari ini.', '', '', '', '', '']);
+  baris.push(['', '', '', '', '', '']);
+  baris.push(['Total outlet', '=COUNTA(' + Oc('ID Digipos') + ')', '', '', '', '']);
+  baris.push(['Sudah branding', '=COUNTIF(' + L('Status') + ',"Sudah Branding")', '', '', '', '']);
+  baris.push(['Belum branding', '=B4-B5', '', '', '', '']);
+  baris.push(['Perlu cek matpro', '=COUNTIF(' + L('Keterangan') + ',"Cek Matpro")', '', '', '', '']);
+  baris.push(['Branding share', '=IFERROR(B5/B4,0)', '', '', '', '']);
+  baris.push(['', '', '', '', '', '']);
+  var mulaiTap = baris.length + 1;
+  baris.push(['Per TAP', 'Outlet', 'Sudah branding', 'Belum branding', 'Branding share', 'Perlu cek']);
+  var taps = unik_(o, oi['TAP']);
+  taps.forEach(function (t) {
+    var r = baris.length + 1;
+    baris.push([t, '=COUNTIF(' + Oc('TAP') + ',A' + r + ')', '=COUNTIFS(' + L('TAP') + ',A' + r + ',' + L('Status') + ',"Sudah Branding")', '=B' + r + '-C' + r, '=IFERROR(C' + r + '/B' + r + ',0)', '=COUNTIFS(' + L('TAP') + ',A' + r + ',' + L('Keterangan') + ',"Cek Matpro")']);
+  });
+  baris.push(['', '', '', '', '', '']);
+  var mulaiMat = baris.length + 1;
+  baris.push(['Per matpro', 'Outlet terpasang', '% dari sudah branding', '', '', '']);
+  MAT.forEach(function (m) {
+    var r = baris.length + 1;
+    baris.push([m[1], '=COUNTIF(' + L(m[1]) + ',"Ya")', '=IFERROR(B' + r + '/$B$5,0)', '', '', '']);
+  });
+  baris.push(['', '', '', '', '', '']);
+  var mulaiSf = baris.length + 1;
+  baris.push(['Per Sales Force', 'Outlet', 'Sudah branding', 'Belum branding', 'Branding share', 'Perlu cek']);
+  var sfs = unik_(o, oi['Nama SF']);
+  sfs.forEach(function (t) {
+    var r = baris.length + 1;
+    baris.push([t, '=COUNTIF(' + Oc('Nama SF') + ',A' + r + ')', '=COUNTIFS(' + L('Nama SF') + ',A' + r + ',' + L('Status') + ',"Sudah Branding")', '=B' + r + '-C' + r, '=IFERROR(C' + r + '/B' + r + ',0)', '=COUNTIFS(' + L('Nama SF') + ',A' + r + ',' + L('Keterangan') + ',"Cek Matpro")']);
+  });
+
+  if (sh.getMaxRows() < baris.length) sh.insertRowsAfter(sh.getMaxRows(), baris.length - sh.getMaxRows());
+  sh.getRange(1, 1, baris.length, 6).setValues(baris);
+
+  // gaya
+  sh.setHiddenGridlines(true);
+  sh.setColumnWidth(1, 230); for (var c = 2; c <= 6; c++) sh.setColumnWidth(c, 125);
+  sh.getRange('A1').setFontSize(16).setFontWeight('bold').setFontColor(WARNA.navy);
+  sh.getRange('A2').setFontColor(WARNA.abuTeks).setFontStyle('italic');
+  sh.getRange('A4:A8').setFontWeight('bold');
+  sh.getRange('B4:B8').setFontSize(13).setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('A4:B8').setBackground(WARNA.abu).setBorder(true, true, true, true, true, true, '#ffffff', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  sh.getRange('B5').setFontColor(WARNA.hijauTeks); sh.getRange('B7').setFontColor(WARNA.oranyeTeks);
+  sh.getRange('B8').setNumberFormat('0.0%');
+  [[mulaiTap, taps.length], [mulaiMat, MAT.length], [mulaiSf, sfs.length]].forEach(function (t) {
+    var lebar = t[0] === mulaiMat ? 3 : 6;
+    sh.getRange(t[0], 1, 1, lebar).setBackground(WARNA.navy).setFontColor('#ffffff').setFontWeight('bold');
+    if (t[1]) {
+      var isi = sh.getRange(t[0] + 1, 1, t[1], lebar);
+      isi.setBorder(null, null, true, null, null, true, '#dbe1ea', SpreadsheetApp.BorderStyle.SOLID);
+      sh.getRange(t[0] + 1, 2, t[1], lebar - 1).setHorizontalAlignment('right');
+    }
+  });
+  if (taps.length) sh.getRange(mulaiTap + 1, 5, taps.length, 1).setNumberFormat('0.0%');
+  sh.getRange(mulaiMat + 1, 3, MAT.length, 1).setNumberFormat('0.0%');
+  if (sfs.length) sh.getRange(mulaiSf + 1, 5, sfs.length, 1).setNumberFormat('0.0%');
+  sh.setFrozenRows(2);
+  sh.setTabColor(WARNA.navy);
+}
+
+function unik_(sh, ci) {
+  if (ci == null || sh.getLastRow() < 2) return [];
+  var v = sh.getRange(2, ci + 1, sh.getLastRow() - 1, 1).getValues();
+  var seen = {}, out = [];
+  v.forEach(function (r) { var t = teks_(r[0]); if (t && !seen[t]) { seen[t] = 1; out.push(t); } });
+  return out.sort();
 }
 
 /** Mengisi tab Outlet dari OUTLET_AWAL (Outlets.gs) hanya bila tab masih kosong. */
