@@ -219,7 +219,7 @@ function buatRingkasan_(ss) {
   });
   baris.push(['', '', '', '', '', '']);
   var mulaiMat = baris.length + 1;
-  baris.push(['Per matpro', 'Outlet terpasang', '% dari sudah branding', '', '', '']);
+  baris.push(['Per matpro', 'Outlet terpasang', '% dari branding', '', '', '']);
   MAT.forEach(function (m) {
     var r = baris.length + 1;
     baris.push([m[1], '=COUNTIF(' + L(m[1]) + ',"Ya")', '=IFERROR(B' + r + '/$B$5,0)', '', '', '']);
