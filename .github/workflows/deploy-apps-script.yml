@@ -1,0 +1,129 @@
+name: Deploy Apps Script
+
+# Otomatis:
+#  - Run pertama : membuat Google Sheet + Apps Script, push kode, deploy Web App,
+#                  menulis URL ke config.js (Vercel ikut deploy ulang).
+#  - Run berikut : setiap perubahan di folder apps-script/ dideploy sebagai versi baru
+#                  ke URL Web App yang sama.
+# Secret yang dibutuhkan (Settings > Secrets and variables > Actions):
+#  - CLASPRC_JSON : isi file ~/.clasprc.json hasil `clasp login` (lihat docs/OTOMATISASI.md)
+#  - ACCESS_CODE  : kode akses dashboard untuk SF
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps-script/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-apps-script
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLASP: npx -y @google/clasp@2.4.2
+      STATE: .github/apps-script-deploy.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cek secret
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then echo "::error::Secret CLASPRC_JSON belum diisi. Lihat docs/OTOMATISASI.md langkah 2."; exit 1; fi
+          if [ -z "$ACCESS_CODE" ]; then echo "::error::Secret ACCESS_CODE belum diisi. Lihat docs/OTOMATISASI.md langkah 3."; exit 1; fi
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8'))" || { echo "::error::CLASPRC_JSON bukan JSON yang valid. Salin ulang seluruh isi ~/.clasprc.json."; exit 1; }
+
+      - name: Siapkan folder build
+        env:
+          ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+        run: |
+          rm -rf build && mkdir build
+          cp apps-script/*.gs apps-script/appsscript.json build/
+          node -e "
+            const fs=require('fs');const p='build/Code.gs';
+            const code=JSON.stringify(process.env.ACCESS_CODE);
+            const s=fs.readFileSync(p,'utf8');
+            const ph=\"var KODE_AKSES = '__KODE_AKSES__';\";
+            if(s.split(ph).length!==2) throw new Error('Baris KODE_AKSES tidak ditemukan tepat satu kali di Code.gs');
+            fs.writeFileSync(p,s.replace(ph,()=>'var KODE_AKSES = '+code+';'));"
+
+      - name: Buat Google Sheet + Apps Script (run pertama saja)
+        id: create
+        run: |
+          if [ -f "$STATE" ] && [ -n "$(node -p "require('./$STATE').scriptId||''")" ]; then
+            echo "Project sudah ada, lewati pembuatan."
+            exit 0
+          fi
+          cd build
+          OUT=$($CLASP create --type sheets --title "Dashboard Branding KSB" --rootDir . 2>&1) || { echo "$OUT"; echo "::error::Gagal membuat project. Pastikan Apps Script API sudah ON di https://script.google.com/home/usersettings"; exit 1; }
+          echo "$OUT"
+          SHEET=$(echo "$OUT" | grep -oE 'https://drive.google.com/open\?id=[A-Za-z0-9_-]+' | head -1 | sed 's/.*id=//')
+          SCRIPT=$(node -p "require('./.clasp.json').scriptId")
+          cd ..
+          node -e "require('fs').writeFileSync('$STATE', JSON.stringify({scriptId:'$SCRIPT',spreadsheetId:'$SHEET',deploymentId:''},null,2)+'\n')"
+          echo "created=1" >> "$GITHUB_OUTPUT"
+
+      - name: Push kode
+        run: |
+          SCRIPT=$(node -p "require('./$STATE').scriptId")
+          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT" > build/.clasp.json
+          # clasp create menimpa manifest dengan bawaan; pakai manifest dari repo
+          cp apps-script/appsscript.json build/appsscript.json
+          cd build && $CLASP push --force
+
+      - name: Deploy Web App (versi baru, URL tetap)
+        run: |
+          SCRIPT=$(node -p "require('./$STATE').scriptId")
+          DEP=$(node -p "require('./$STATE').deploymentId||''")
+          VER=$(grep -oE "VERSI_KODE = '[^']+'" apps-script/Code.gs | sed "s/.*= '//;s/'//")
+          MSG="v$VER $(git rev-parse --short HEAD)"
+          cd build
+          if [ -n "$DEP" ]; then
+            $CLASP deploy --deploymentId "$DEP" --description "$MSG"
+          else
+            OUT=$($CLASP deploy --description "$MSG" 2>&1); echo "$OUT"
+            DEP=$(echo "$OUT" | grep -oE 'AKfy[A-Za-z0-9_-]+' | head -1)
+            [ -n "$DEP" ] || { echo "::error::Deployment ID tidak terbaca dari output clasp."; exit 1; }
+            cd ..
+            node -e "const f='$STATE';const s=require('./'+f);s.deploymentId='$DEP';require('fs').writeFileSync(f,JSON.stringify(s,null,2)+'\n')"
+            cd build
+          fi
+          cd ..
+          URL="https://script.google.com/macros/s/$DEP/exec"
+          printf '// Diisi otomatis oleh GitHub Actions (deploy-apps-script.yml).\nwindow.APP_CONFIG = {\n  API_URL: "%s"\n};\n' "$URL" > config.js
+          echo "URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Simpan ID & URL ke repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$STATE" config.js
+          if git diff --cached --quiet; then echo "Tidak ada perubahan."; exit 0; fi
+          git commit -m "Apps Script: simpan ID deployment & URL Web App"
+          git push
+
+      - name: Ringkasan
+        run: |
+          SCRIPT=$(node -p "require('./$STATE').scriptId")
+          SHEET=$(node -p "require('./$STATE').spreadsheetId||''")
+          {
+            echo "## Deploy Apps Script selesai"
+            echo ""
+            echo "- Web App: $URL"
+            [ -n "$SHEET" ] && echo "- Google Sheet: https://docs.google.com/spreadsheets/d/$SHEET/edit"
+            echo "- Editor Apps Script: https://script.google.com/d/$SCRIPT/edit"
+            echo ""
+            echo "**Run pertama:** buka Editor Apps Script, pilih fungsi \`setup\`, klik Run, lalu Allow. Ini sekali saja."
+          } >> "$GITHUB_STEP_SUMMARY"

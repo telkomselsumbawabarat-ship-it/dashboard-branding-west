@@ -14,19 +14,19 @@ Alurnya: **SF buka link Vercel → isi laporan → data masuk Google Sheet, foto
 
 Waktu setup ±20 menit. Kerjakan berurutan.
 
+> **Lebih mudah:** ikuti `docs/OTOMATISASI.md`. GitHub Actions akan membuat Sheet, mengisi outlet, mendeploy Apps Script, dan mengisi `config.js` otomatis. Panduan manual di bawah ini hanya cadangan.
+
 ---
 
 ## Bagian A — Google Sheet & Apps Script
 
 1. Buka [sheets.new](https://sheets.new) dengan akun Google yang akan menyimpan data (mis. akun cluster). Beri nama **Dashboard Branding KSB**.
 2. Menu **Extensions › Apps Script**. Hapus semua isi `Code.gs` bawaan, lalu tempel seluruh isi file `apps-script/Code.gs`.
-3. Di baris paling atas, ganti `KODE_AKSES = 'ganti-kode-ini'` dengan kode yang akan dibagikan ke SF, misalnya `'ksb2026'`. Klik ikon **Save**.
+3. Klik **+ › Script**, beri nama `Outlets`, lalu tempel isi `apps-script/Outlets.gs` (data 987 outlet). Kembali ke `Code.gs`, ganti `'__KODE_AKSES__'` pada baris `var KODE_AKSES` dengan kode untuk SF, misalnya `'ksb2026'`. Klik **Save**.
 4. Di toolbar, pilih fungsi **setup** lalu klik **Run**.
    Google akan meminta izin: **Review permissions › pilih akun › Advanced › Go to … (unsafe) › Allow**. Ini normal untuk script buatan sendiri.
    Hasilnya: tab **Outlet**, **Laporan**, **Riwayat** terbentuk, dan folder **Dokumentasi Branding KSB** dibuat di Google Drive.
-5. Isi tab **Outlet**:
-   - Di tab Outlet, blok kolom A–B lalu **Format › Number › Plain text** (supaya ID Digipos & no RS tidak berubah jadi angka ilmiah).
-   - Buka `Outlet_Master.xlsx`, salin semua data termasuk judul kolom (A1 sampai I988), tempel di sel **A1** tab Outlet.
+5. Tab **Outlet** otomatis terisi 987 outlet saat `setup` dijalankan. `Outlet_Master.xlsx` hanya cadangan bila ingin mengisi manual.
 6. Klik **Deploy › New deployment** → ikon gerigi → **Web app**.
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -94,7 +94,7 @@ Edit langsung tab **Outlet** di Google Sheet (tambah/hapus baris). Dashboard mem
 
 ## Mengganti kode akses
 
-Ubah `KODE_AKSES` di `Code.gs` → Save → deploy **New version**. SF akan diminta kode baru saat membuka dashboard.
+Bila memakai otomatisasi: ubah secret `ACCESS_CODE` di GitHub lalu jalankan workflow *Deploy Apps Script*. Bila manual: ubah `KODE_AKSES` di `Code.gs` → Save → deploy **New version**. SF akan diminta kode baru saat membuka dashboard.
 
 ---
 

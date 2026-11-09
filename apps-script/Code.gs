@@ -3,14 +3,18 @@
  * Data   : Google Sheet (tab Outlet, Laporan, Riwayat)
  * Foto   : Google Drive (folder "Dokumentasi Branding KSB" / satu folder per outlet)
  *
- * PENTING setiap kali kode ini diubah:
- *   Deploy > Manage deployments > (ikon pensil) > Version: New version > Deploy
- *   Tanpa langkah ini, perubahan TIDAK aktif. Dashboard akan menampilkan
- *   peringatan "Kode Apps Script lama" bila versinya tidak cocok.
+ * Deploy otomatis: setiap perubahan folder apps-script/ di GitHub dikirim ke
+ * Apps Script dan dideploy sebagai versi baru oleh GitHub Actions
+ * (.github/workflows/deploy-apps-script.yml).
+ * Bila mengedit langsung di editor Apps Script: Deploy > Manage deployments >
+ * ikon pensil > Version: New version > Deploy. Dashboard menampilkan
+ * "Kode Apps Script lama" bila versinya tidak cocok.
  */
 
 // ======= PENGATURAN =======
-var KODE_AKSES = 'ganti-kode-ini';          // kode yang diketik SF saat pertama buka dashboard ('' = tanpa kode)
+// Kode akses diisi otomatis dari GitHub secret ACCESS_CODE saat deploy.
+// Bila mengisi manual, ganti '__KODE_AKSES__' dengan kode Anda (mis. 'ksb2026').
+var KODE_AKSES = '__KODE_AKSES__';
 var NAMA_FOLDER_FOTO = 'Dokumentasi Branding KSB';
 var VERSI_KODE = '2026-11-09a';             // jangan diubah kecuali dashboard juga diperbarui
 // ==========================
@@ -59,8 +63,14 @@ function kirim_(obj, callback) {
   return ContentService.createTextOutput(s).setMimeType(ContentService.MimeType.JSON);
 }
 
+function kodeAktif_() {
+  if (KODE_AKSES && KODE_AKSES.indexOf('__') !== 0) return KODE_AKSES;
+  return PropertiesService.getScriptProperties().getProperty('KODE_AKSES') || '';
+}
+
 function cekKode_(k) {
-  if (KODE_AKSES && String(k || '') !== KODE_AKSES) throw new Error('KODE_SALAH');
+  var kode = kodeAktif_();
+  if (kode && String(k || '') !== kode) throw new Error('KODE_SALAH');
 }
 
 /* ---------------- setup (jalankan sekali dari editor) ---------------- */
@@ -74,8 +84,21 @@ function setup() {
     var c = HEAD_LAPORAN.indexOf(h) + 1;
     lap.getRange(2, c, lap.getMaxRows() - 1, 1).setNumberFormat('@');
   });
+  isiOutletAwal_(ss);
+  var def = ss.getSheetByName('Sheet1');
+  if (def && ss.getSheets().length > 1 && def.getLastRow() === 0) ss.deleteSheet(def);
   folderInduk_();
-  return 'Setup selesai. Isi tab Outlet dengan data outlet (lihat panduan).';
+  return 'Setup selesai.';
+}
+
+/** Mengisi tab Outlet dari OUTLET_AWAL (Outlets.gs) hanya bila tab masih kosong. */
+function isiOutletAwal_(ss) {
+  var sh = ss.getSheetByName('Outlet');
+  if (sh.getLastRow() > 1 || typeof OUTLET_AWAL === 'undefined' || !OUTLET_AWAL.length) return;
+  var n = OUTLET_AWAL.length;
+  if (sh.getMaxRows() < n + 1) sh.insertRowsAfter(sh.getMaxRows(), n + 1 - sh.getMaxRows());
+  sh.getRange(2, 1, n, 2).setNumberFormat('@');
+  sh.getRange(2, 1, n, HEAD_OUTLET.length).setValues(OUTLET_AWAL);
 }
 
 function siapkanSheet_(ss, nama, head) {
@@ -92,8 +115,8 @@ function siapkanSheet_(ss, nama, head) {
 /* ---------------- baca data ---------------- */
 function ambilData_() {
   var ss = SpreadsheetApp.getActive();
+  if (!ss.getSheetByName('Outlet') || !ss.getSheetByName('Laporan')) setup();
   var shO = ss.getSheetByName('Outlet');
-  if (!shO) throw new Error('Tab "Outlet" belum ada. Jalankan fungsi setup() dulu.');
   var outlets = [];
   if (shO.getLastRow() > 1) {
     var vals = shO.getRange(1, 1, shO.getLastRow(), shO.getLastColumn()).getValues();
