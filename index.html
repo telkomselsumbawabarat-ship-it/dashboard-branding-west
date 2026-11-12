@@ -453,7 +453,30 @@ async function apiPost(body){
   if(!d.ok){if(d.error==='KODE_SALAH'){showGate('Kode akses salah atau sudah diganti.');}throw new Error(d.error==='KODE_SALAH'?'Kode akses salah.':d.error)}
   return d;
 }
-function cekVersi(v){const b=$('#verBox');if(v!==VERSI_HARAP){b.hidden=false;b.innerHTML='<b>Kode Apps Script lama</b> (versi '+esc(v)+', seharusnya '+VERSI_HARAP+'). Di Apps Script buka Deploy › Manage deployments › edit › Version: <b>New version</b> › Deploy.';setSync('Kode lama','err')}else b.hidden=true}
+function cekVersi(v){
+  const b=$('#verBox');
+  if(!v||v===VERSI_HARAP){b.hidden=true;return}
+  b.hidden=false;
+  if(v>VERSI_HARAP){
+    // Halaman di browser ini versi lama (server sudah lebih baru) -> muat ulang otomatis,
+    // kecuali sedang mengisi/menyimpan laporan supaya isian tidak hilang.
+    const sibuk=saving||!!sel||MAT.some(m=>P[m.k].length);
+    let sudah=false;try{sudah=sessionStorage.getItem('bksb_reload')===v}catch{}
+    if(!sibuk&&!sudah){
+      try{sessionStorage.setItem('bksb_reload',v)}catch{}
+      b.className='notice info';b.textContent='Dashboard versi baru tersedia. Memuat ulang…';
+      location.replace(location.pathname+'?v='+encodeURIComponent(v)+location.hash);return;
+    }
+    b.className='notice info';
+    b.innerHTML='<b>Dashboard versi baru tersedia.</b> '+(sibuk?'Selesaikan dulu laporan yang sedang diisi, lalu ':'')+'<button class="btn sm" type="button" id="btnMuat">Muat ulang sekarang</button>';
+    $('#btnMuat').onclick=()=>location.replace(location.pathname+'?v='+encodeURIComponent(v)+'&t='+Date.now()+location.hash);
+    setSync('Perlu muat ulang','err');return;
+  }
+  // Server lebih lama dari halaman: deploy otomatis Apps Script belum selesai (biasanya 1-2 menit).
+  b.className='notice';
+  b.innerHTML='<b>Server sedang diperbarui.</b> Biasanya selesai dalam 1–2 menit dan data tetap aman. Tekan ↻ untuk mencoba lagi.';
+  setSync('Server diperbarui','err');
+}
 
 /* ---------- toast / sync ---------- */
 let tt;function toast(m){$('#toastRoot').innerHTML='<div class="toast" role="status">'+esc(m)+'</div>';clearTimeout(tt);tt=setTimeout(()=>$('#toastRoot').innerHTML='',3500)}
