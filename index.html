@@ -367,13 +367,13 @@ img{max-width:100%}
       </div>
 
       <div class="step">
-        <h3><span class="n">2</span>Material promo yang dipasang</h3>
+        <h3><span class="n">2</span>Material promo yang dipasang<span class="req">wajib</span></h3>
         <p class="hint">Centang semua yang terpasang. Minimal 1 item = <b>Sudah Branding</b>.</p>
         <div class="tiles" id="tiles"></div>
       </div>
 
       <div class="step">
-        <h3><span class="n">3</span>Foto dokumentasi per matpro</h3>
+        <h3><span class="n">3</span>Foto dokumentasi per matpro<span class="req">wajib</span></h3>
         <p class="hint">Setiap matpro yang dicentang wajib minimal 1 foto (maks. 3). <b>Kamera</b> langsung memotret, <b>Galeri</b> memilih foto yang sudah ada.</p>
         <div class="mphoto" id="mphoto"></div>
       </div>
@@ -412,7 +412,7 @@ img{max-width:100%}
 <script src="config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const VERSI_HARAP='2026-11-09c';
+const VERSI_HARAP='2026-11-12a';
 const API=((window.APP_CONFIG||{}).API_URL||'').trim();
 const MAT = [
   {k:'poster',n:'Poster',i:'<rect x="7" y="4" width="18" height="24" rx="1.5"/><path d="M11 10h10M11 14h10M11 18h6"/>'},
@@ -728,23 +728,20 @@ function renderSum(){
   $('#tglHint').textContent=t?'Cek matpro dijadwalkan '+fmt(addMonths(t,3))+' (3 bulan setelah pemasangan).':'';
   let h;
   if(!sel)h='<div><div class="big">Pilih outlet dulu</div><div class="muted">Status akan muncul di sini.</div></div>';
-  else if(!it.length)h='<span class="pill p-bad">Belum branding</span><div class="muted">Belum ada matpro dicentang. Centang minimal 1 item agar outlet berstatus Sudah Branding.</div>';
+  else if(!it.length)h='<span class="pill p-bad">Belum lengkap</span><div class="muted">Centang minimal 1 matpro yang dipasang, lalu ambil fotonya.</div>';
   else h='<span class="pill p-ok">Sudah branding</span><div><b>'+esc(sel.nama)+'</b> · '+it.length+' matpro ('+it.map(k=>MATN[k]).join(', ')+')<br><span class="muted">Cek matpro: '+(t?fmt(addMonths(t,3)):'–')+' · '+nf+' foto</span>'+(ms.length?'<br><span style="color:var(--warn);font-weight:600">Foto belum ada: '+ms.map(k=>MATN[k]).join(', ')+'</span>':'')+'</div>';
   $('#sum').innerHTML=h;
   // syarat sebelum tombol Simpan aktif
   const need=[];
   if(!sel)need.push('pilih outlet');
   if(ms.length)need.push('foto '+ms.map(k=>MATN[k]).join(', '));
-  const perluTgl=it.length>0;
-  if(perluTgl&&!t)need.push('tanggal pemasangan');
+  if(sel&&!it.length)need.push('centang minimal 1 matpro');
+  if(!t)need.push('tanggal pemasangan');
   if(t&&t>TODAY)need.push('tanggal pemasangan tidak boleh melewati hari ini');
   if(!pelVal())need.push('nama pelapor');
-  $('#tglReq').textContent=perluTgl?'wajib':'tidak perlu';
-  $('#tgl').disabled=!perluTgl&&!!sel;
-  $('#tgl').classList.toggle('miss',!!sel&&perluTgl&&!t);
+  $('#tgl').classList.toggle('miss',!!sel&&!t);
   $('#pel').classList.toggle('miss',!!sel&&!pelVal()&&$('#pel').value!=='__lain');
   $('#pelLain').classList.toggle('miss',$('#pel').value==='__lain'&&!pelVal());
-  if(sel&&!perluTgl)$('#tglHint').textContent='Tidak ada matpro dicentang, jadi tanggal pemasangan tidak diperlukan.';
   if(!saving){$('#btnSave').disabled=need.length>0;$('#saveHint').innerHTML=need.length?'Lengkapi dulu: <b>'+esc(need.join(' · '))+'</b>':'Semua isian lengkap. Siap disimpan.'}
 }
 async function shrink(file){
@@ -824,7 +821,8 @@ $('#frm').addEventListener('submit',async e=>{
   if(!sel){toast('Pilih outlet terlebih dahulu.');oq.focus();return}
   const it=chosen(),t=$('#tgl').value,pel=pelVal();
   const ms=missing();if(ms.length){toast('Tambahkan foto untuk: '+ms.map(k=>MATN[k]).join(', ')+'.');$('#mphoto').scrollIntoView({behavior:'smooth',block:'center'});return}
-  if(it.length&&!t){toast('Isi tanggal pemasangan.');$('#tgl').focus();return}
+  if(!it.length){toast('Centang minimal 1 matpro yang dipasang.');return}
+  if(!t){toast('Isi tanggal pemasangan.');$('#tgl').focus();return}
   if(t>TODAY){toast('Tanggal pemasangan tidak boleh di masa depan.');return}
   if(!pel){toast('Isi nama pelapor.');$('#pel').focus();return}
   ls.set('bksb_pelapor',pel);
