@@ -195,6 +195,10 @@ select.field{appearance:auto}
 .gal a{display:block;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:var(--sunk);max-width:100%}
 .gal img{width:100%;height:100%;object-fit:cover;display:block}
 .cekbox{background:var(--sunk);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.hil{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.hil label{display:flex;gap:8px;align-items:center;font-weight:600}
+.cekbox #cOleh{flex:none}
+.cekbox .hil input{width:18px;height:18px;padding:0;flex:none;accent-color:var(--red)}
 .cekbox .row{display:flex;gap:8px;flex-wrap:wrap}
 .cekbox select,.cekbox input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;flex:1 1 140px;min-width:0}
 
@@ -412,7 +416,7 @@ img{max-width:100%}
 <script src="config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const VERSI_HARAP='2026-11-12a';
+const VERSI_HARAP='2026-11-12b';
 const API=((window.APP_CONFIG||{}).API_URL||'').trim();
 const MAT = [
   {k:'poster',n:'Poster',i:'<rect x="7" y="4" width="18" height="24" rx="1.5"/><path d="M11 10h10M11 14h10M11 18h6"/>'},
@@ -638,26 +642,36 @@ function openDrawer(id){
    (has?
      '<dl class="kv"><dt>Tgl pasang</dt><dd>'+fmt(r.tglPasang)+'</dd>'+(r.tglCek?'<dt>Cek terakhir</dt><dd>'+fmt(r.tglCek)+' · '+esc(r.kondisiCek||'')+'</dd>':'')+'<dt>Cek berikutnya</dt><dd>'+fmt(i.next)+(i.left<=0?' <span style="color:var(--warn)">(sudah waktunya)</span>':'')+'</dd>'+(r.pelapor?'<dt>Pelapor</dt><dd>'+esc(r.pelapor)+'</dd>':'')+(r.catatan?'<dt>Catatan</dt><dd>'+esc(r.catatan)+'</dd>':'')+'</dl>'+
      '<div><div class="eyebrow" style="margin-bottom:6px">Dokumentasi per matpro</div>'+r.items.map(k=>{const fs=(r.fotoMat||{})[k]||[];return '<div class="gal-h">'+esc(MATN[k]||k)+' <span class="muted" style="font-weight:500">· '+fs.length+' foto</span></div>'+(fs.length?'<div class="gal" style="margin-bottom:10px">'+fs.map(f=>'<button type="button" data-lb="'+esc(o.id)+'" data-f="'+esc(f)+'"><img loading="lazy" src="'+thumb(f,600)+'" alt="Foto '+esc(MATN[k]||k)+' di '+esc(o.nama)+'"></button>').join('')+'</div>':'')}).join('')+'</div>'+
-     '<div class="cekbox"><b>Catat hasil cek matpro</b><div class="row"><input type="date" id="cTgl" value="'+TODAY+'" max="'+TODAY+'" aria-label="Tanggal cek"><select id="cKon" aria-label="Kondisi"><option>Baik, masih terpasang</option><option>Rusak / pudar</option><option>Hilang / dicopot</option></select></div><input id="cOleh" placeholder="Nama pemeriksa" value="'+esc(ls.get('bksb_pelapor'))+'" aria-label="Nama pemeriksa" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px"><button class="btn" id="cSave" type="button">Simpan hasil cek</button><span class="muted" style="font-size:12px">Bila matpro hilang, ubah laporan dan hapus centang matpro tersebut.</span></div>'
-   :'<div class="notice info">Outlet ini belum punya laporan pemasangan.</div>')+
+     '<div class="cekbox"><b>Catat hasil cek matpro</b><div class="row"><input type="date" id="cTgl" value="'+TODAY+'" max="'+TODAY+'" aria-label="Tanggal cek"><select id="cKon" aria-label="Kondisi"><option>Baik, masih terpasang</option><option>Rusak / pudar</option><option>Hilang / dicopot</option></select></div><div id="cHil" class="hil" hidden><span>Matpro yang hilang / dicopot:</span>'+r.items.map(k=>'<label><input type="checkbox" value="'+k+'" checked> '+esc(MATN[k]||k)+'</label>').join('')+'<span class="muted" id="cHilInfo"></span></div><input id="cOleh" placeholder="Nama pemeriksa" value="'+esc(ls.get('bksb_pelapor'))+'" aria-label="Nama pemeriksa" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px"><button class="btn" id="cSave" type="button">Simpan hasil cek</button></div>'
+   :(r&&/^Hilang/.test(r.kondisiCek||'')?'<div class="notice">'+esc(r.kondisiCek)+(r.tglCek?' (dicek '+fmt(r.tglCek)+')':'')+'. Status kembali <b>Belum branding</b>. Buat laporan baru bila matpro dipasang lagi.</div>':'<div class="notice info">Outlet ini belum punya laporan pemasangan.</div>'))+
    '<a class="btn pri" href="#input" id="dEdit">'+(r?'Ubah laporan':'Buat laporan')+'</a></aside>';
   const close=()=>$('#drawerRoot').innerHTML='';
   $('#scrim').onclick=close;$('#dx').onclick=close;
   $('#dEdit').onclick=()=>{close();pickOutlet(id)};
   $('#drawerRoot aside').addEventListener('click',e=>{const b=e.target.closest('[data-lb]');if(b)openLb(b.dataset.lb,b.dataset.f)});
   const cs=$('#cSave');if(cs)cs.onclick=()=>saveCek(id);
+  if($('#cKon')){
+    const upd=()=>{const hil=$('#cKon').value.startsWith('Hilang');$('#cHil').hidden=!hil;
+      const pilih=[...document.querySelectorAll('#cHil input:checked')].map(x=>x.value);const sisa=r.items.length-pilih.length;
+      $('#cHilInfo').textContent=!pilih.length?'Centang matpro yang hilang.':(sisa?'Tersisa '+sisa+' matpro, status tetap Sudah branding.':'Semua matpro hilang, status outlet jadi Belum branding.');
+      $('#cSave').disabled=hil&&!pilih.length;};
+    $('#cKon').onchange=upd;$('#cHil').onchange=upd;upd();
+  }
   $('#dx').focus();
 }
 async function saveCek(id){
   const tgl=$('#cTgl').value,kon=$('#cKon').value,oleh=$('#cOleh').value.trim();
+  const hilang=kon.startsWith('Hilang')?[...document.querySelectorAll('#cHil input:checked')].map(x=>x.value):[];
   if(!tgl){toast('Isi tanggal cek.');return}
   if(!oleh){toast('Isi nama pemeriksa.');$('#cOleh').focus();return}
   ls.set('bksb_pelapor',oleh);
   $('#cSave').disabled=true;$('#cSave').textContent='Menyimpan…';
   try{
-    await apiPost({action:'cek',outletId:id,tglCek:tgl,kondisi:kon,oleh});
-    R[id]={...R[id],tglCek:tgl,kondisiCek:kon};
-    toast('Hasil cek tersimpan. Cek berikutnya '+fmt(addMonths(tgl,3))+'.');renderDash();openDrawer(id);
+    const d=await apiPost({action:'cek',outletId:id,tglCek:tgl,kondisi:kon,hilang,oleh});
+    const items=Array.isArray(d.items)?d.items:(R[id].items||[]).filter(k=>!hilang.includes(k));
+    R[id]={...R[id],items,tglCek:tgl,kondisiCek:d.kondisi||kon};
+    toast(!items.length?'Tersimpan. Semua matpro hilang, status jadi Belum branding.':(hilang.length?'Tersimpan. Tersisa '+items.length+' matpro. ':'Hasil cek tersimpan. ')+(items.length?'Cek berikutnya '+fmt(addMonths(tgl,3))+'.':''));
+    renderDash();openDrawer(id);
   }catch(e){toast('Gagal menyimpan: '+(e.message||e));$('#cSave').disabled=false;$('#cSave').textContent='Simpan hasil cek'}
 }
 

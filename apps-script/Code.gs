@@ -16,7 +16,7 @@
 // Bila mengisi manual, ganti '__KODE_AKSES__' dengan kode Anda (mis. 'ksb2026').
 var KODE_AKSES = '__KODE_AKSES__';
 var NAMA_FOLDER_FOTO = 'Dokumentasi Branding KSB';
-var VERSI_KODE = '2026-11-12a';             // jangan diubah kecuali dashboard juga diperbarui
+var VERSI_KODE = '2026-11-12b';             // jangan diubah kecuali dashboard juga diperbarui
 // ==========================
 
 var MAT = [
@@ -419,7 +419,7 @@ function simpanLaporan_(L) {
     // foto yang dihapus dari laporan dipindah ke sampah Drive
     if (lama) {
       var baru = {}; Object.keys(fotoMat).forEach(function (k) { fotoMat[k].forEach(function (f) { baru[f] = 1; }); });
-      Object.keys(lama.fotoMat || {}).forEach(function (k) {
+      Object.keys(lama.fotoMat || {}).filter(function (k) { return lama.items.indexOf(k) >= 0; }).forEach(function (k) {
         (lama.fotoMat[k] || []).forEach(function (f) { if (!baru[f]) { try { DriveApp.getFileById(f).setTrashed(true); } catch (e) { } } });
       });
     }
@@ -440,14 +440,27 @@ function simpanCek_(b) {
     if (!pos.row) throw new Error('Outlet ini belum punya laporan pemasangan.');
     var lama = barisKeLaporan_(pos.values, pos.idx);
     var dasar = b.tglCek > lama.tglPasang ? b.tglCek : lama.tglPasang;
-    tulisBaris_(sh, pos, {
-      'Tanggal Cek Terakhir': b.tglCek, 'Kondisi Cek': String(b.kondisi || ''),
+    var kondisi = String(b.kondisi || '');
+    var rec = {
+      'Tanggal Cek Terakhir': b.tglCek, 'Kondisi Cek': kondisi,
       'Jadwal Cek Matpro': tambahBulan_(dasar, 3),
       'Diperbarui': Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm')
-    });
-    catat_('cek', id, pos.values[pos.idx['Nama Outlet']], b.oleh, b.tglCek + ' · ' + b.kondisi);
+    };
+    // Matpro hilang/dicopot: dihapus dari outlet. Bila tidak ada yang tersisa -> Belum Branding.
+    // Foto lama tetap disimpan di Drive sebagai bukti.
+    var hilang = (b.hilang || []).filter(function (k) { return lama.items.indexOf(k) >= 0; });
+    var sisa = lama.items.filter(function (k) { return hilang.indexOf(k) < 0; });
+    if (hilang.length) {
+      MAT.forEach(function (m) { rec[m[1]] = sisa.indexOf(m[0]) >= 0 ? 'Ya' : ''; });
+      rec['Jumlah Matpro'] = sisa.length;
+      rec['Kondisi Cek'] = 'Hilang / dicopot: ' + hilang.map(namaMat_).join(', ');
+      if (!sisa.length) { rec['Status'] = 'Belum Branding'; rec['Jadwal Cek Matpro'] = ''; }
+    }
+    tulisBaris_(sh, pos, rec);
+    catat_('cek', id, pos.values[pos.idx['Nama Outlet']], b.oleh, b.tglCek + ' · ' + rec['Kondisi Cek'] +
+      (hilang.length ? (sisa.length ? ' · tersisa ' + sisa.map(namaMat_).join(', ') : ' · status jadi Belum Branding') : ''));
   } finally { lock.releaseLock(); }
-  return { ok: true };
+  return { ok: true, items: sisa, kondisi: rec['Kondisi Cek'] };
 }
 
 /* ---------------- util sheet ---------------- */
